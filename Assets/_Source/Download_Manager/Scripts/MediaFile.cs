@@ -17,6 +17,53 @@ public static class MediaExtension
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+//  MediaCategory — maps a file extension to a storage sub-folder
+// ────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Single source of truth for classifying a media file by extension and deciding
+/// which sub-folder it belongs in (Images / Videos / Models / Other). Keeping this
+/// in one place means the download layer, loaders, and any future tooling all agree
+/// on where a given file type lives (DRY).
+/// </summary>
+public static class MediaCategory
+{
+    // Sub-folder names under the root media directory.
+    public const string Images = "Images";
+    public const string Videos = "Videos";
+    public const string Models = "Models";
+    public const string Other  = "Other";
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".webp" };
+
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v" };
+
+    private static readonly HashSet<string> ModelExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".glb", ".gltf", ".obj", ".fbx", ".dae", ".ply", ".stl" };
+
+    /// <summary>All category sub-folders that should always exist (so the structure
+    /// is complete even when a category currently has no files).</summary>
+    public static readonly string[] AllFolders = { Images, Videos, Models };
+
+    /// <summary>Returns the sub-folder name for a file extension (e.g. ".png" → "Images").</summary>
+    public static string ForExtension(string extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+            return Other;
+        if (ImageExtensions.Contains(extension)) return Images;
+        if (VideoExtensions.Contains(extension)) return Videos;
+        if (ModelExtensions.Contains(extension)) return Models;
+        return Other;
+    }
+
+    /// <summary>Returns the sub-folder name for a file name or URL (uses its extension).</summary>
+    public static string ForFileName(string fileNameOrUrl)
+        => ForExtension(Path.GetExtension(fileNameOrUrl ?? string.Empty));
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 //  MediaFile — immutable data record
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -56,6 +103,9 @@ public class MediaFile
     public bool IsImage  => FileType is MediaExtension.Jpg
                                       or MediaExtension.Jpeg
                                       or MediaExtension.Png;
+
+    /// <summary>The storage sub-folder this file belongs to (Images / Videos / Models / Other).</summary>
+    public string Category => MediaCategory.ForExtension(FileType);
 
     /// <summary>Returns true if the file physically exists on disk.</summary>
     public bool ExistsOnDisk => File.Exists(LocalPath);
