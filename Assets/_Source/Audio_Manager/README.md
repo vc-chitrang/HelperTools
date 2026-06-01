@@ -10,12 +10,13 @@ Part of the **HelperTools** framework → System #4 *Audio Framework* (Phase 1).
 ## ✨ Features
 
 - **One facade** (`AudioManager`) for everything — gameplay & UI call a single API.
-- **Audio Mixer integration** — `Master`, `BGM`, `SFX` groups with exposed volume params; volume set in correct **decibels** (not raw linear).
+- **4 channels** — `Master`, `BGM`, `SFX`, `VO` — each with its own mixer group, exposed volume param, slider/UI, and AudioSources.
+- **Audio Mixer integration** — volume set in correct **decibels** (not raw linear).
 - **BGM / Dynamic Music** — crossfade between tracks, fade in/out, pause/resume.
-- **SFX**:
-  - `PlaySfxOneShot` — **pooled**, auto-returned to the pool when it finishes.
+- **SFX / VO**:
+  - `PlaySFX(clip, onComplete, volume, pitch)` / `PlayVO(clip, onComplete, volume, pitch)` — **pooled**, auto-returned when finished, with a **completion callback**.
   - `PlaySfxLooping` — lives until you stop it (ambient / "until app closes").
-  - **Multiple / overlapping** play — just call one-shot repeatedly.
+  - **Multiple / overlapping** play — just call repeatedly.
 - **Reusable AudioSource pool** — prewarmed, auto-expands to a cap, no per-sound GameObject churn.
 - **Volume UI panel** — per-channel slider (0–100%) + mute toggle button with **sprite swap**.
 - **Persistence** — volumes & mute states saved to `PlayerPrefs`.
@@ -31,7 +32,7 @@ Part of the **HelperTools** framework → System #4 *Audio Framework* (Phase 1).
 | **Pool** | `SfxAudioSourcePool` | Recycles `AudioSource` instances for SFX. |
 | **UI** | `AudioVolumePanel` | Sliders + mute buttons. *Talks only to `AudioManager`.* |
 | **Data** | `AudioChannel`, `AudioMixerParameters`, `AudioVolume` | Channel enum, mixer param names, linear⇄dB conversion. |
-| **Asset** | `Audio/GameAudioMixer.mixer` | Master ▸ BGM / SFX groups; exposed `MasterVolume`/`BGMVolume`/`SFXVolume`. |
+| **Asset** | `Audio/GameAudioMixer.mixer` | Master ▸ BGM / SFX / VO groups; exposed `MasterVolume`/`BGMVolume`/`SFXVolume`/`VOVolume`. |
 
 ---
 
@@ -59,15 +60,19 @@ AudioManager.Instance.PlayBGM(battleMusic, fadeDuration: 2f);
 AudioManager.Instance.StopBGM();                          // fade out
 AudioManager.Instance.PauseBGM();  AudioManager.Instance.ResumeBGM();
 
-// ── SFX ──────────────────────────────────────────────
-AudioManager.Instance.PlaySfxOneShot(clickClip);          // pooled, auto-returns
-AudioManager.Instance.PlaySfxOneShot(shootClip, volume: 0.8f, pitch: 1.1f); // overlaps freely
+// ── SFX (pooled, auto-returns, with completion callback) ──
+AudioManager.Instance.PlaySFX(clickClip);                              // fire & forget
+AudioManager.Instance.PlaySFX(shootClip, () => Debug.Log("done"), 0.8f); // callback + volume
+AudioManager.Instance.PlaySFX(hitClip, null, 1f, pitch: 1.2f);        // overlaps freely
 
-AudioSource loop = AudioManager.Instance.PlaySfxLooping(engineHum);  // lives until stopped
-AudioManager.Instance.StopSfx(loop);                      // stop + recycle
+AudioSource loop = AudioManager.Instance.PlaySfxLooping(engineHum);   // lives until stopped
+AudioManager.Instance.StopSfx(loop);                                  // stop + recycle
+
+// ── Voice-over (VO channel, same pattern) ────────────
+AudioManager.Instance.PlayVO(line01, () => ShowNextLine(), volume: 1f);
 
 // ── Volume & Mute (also driven by the UI panel) ──────
-AudioManager.Instance.SetVolume(AudioChannel.SFX, 0.5f);  // linear 0–1
+AudioManager.Instance.SetVolume(AudioChannel.VO, 0.5f);   // linear 0–1
 AudioManager.Instance.ToggleMute(AudioChannel.BGM);
 bool muted = AudioManager.Instance.IsMuted(AudioChannel.Master);
 ```

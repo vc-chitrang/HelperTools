@@ -10,7 +10,8 @@ namespace AudioSystem
     {
         Master,
         BGM,
-        SFX
+        SFX,
+        VO
     }
 
     /// <summary>
@@ -24,6 +25,7 @@ namespace AudioSystem
         public const string Master = "MasterVolume";
         public const string BGM    = "BGMVolume";
         public const string SFX    = "SFXVolume";
+        public const string VO     = "VOVolume";
 
         /// <summary>Returns the exposed mixer parameter name for a channel.</summary>
         public static string For(AudioChannel channel) => channel switch
@@ -31,6 +33,7 @@ namespace AudioSystem
             AudioChannel.Master => Master,
             AudioChannel.BGM    => BGM,
             AudioChannel.SFX    => SFX,
+            AudioChannel.VO     => VO,
             _                   => Master
         };
     }

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Reflection;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -62,10 +63,12 @@ namespace AudioSystem.EditorTools
 
             object bgm = CreateGroup(ctrlType, mixer, master, "BGM");
             object sfx = CreateGroup(ctrlType, mixer, master, "SFX");
+            object vo  = CreateGroup(ctrlType, mixer, master, "VO");
 
             ExposeVolume(ctrlType, groupType, expType, mixer, master, AudioMixerParameters.Master);
             ExposeVolume(ctrlType, groupType, expType, mixer, bgm,    AudioMixerParameters.BGM);
             ExposeVolume(ctrlType, groupType, expType, mixer, sfx,    AudioMixerParameters.SFX);
+            ExposeVolume(ctrlType, groupType, expType, mixer, vo,     AudioMixerParameters.VO);
 
             EditorUtility.SetDirty((UnityEngine.Object)mixer);
             AssetDatabase.SaveAssets();
@@ -151,6 +154,7 @@ namespace AudioSystem.EditorTools
 
             AudioMixerGroup bgmGroup = FirstGroup(mixer, "BGM");
             AudioMixerGroup sfxGroup = FirstGroup(mixer, "SFX");
+            AudioMixerGroup voGroup  = FirstGroup(mixer, "VO");
 
             // ── AudioManager ───────────────────────────────────────────────────
             var managerGO = new GameObject(ManagerName);
@@ -160,10 +164,12 @@ namespace AudioSystem.EditorTools
             amSo.FindProperty("_mixer").objectReferenceValue = mixer;
             amSo.FindProperty("_bgmGroup").objectReferenceValue = bgmGroup;
             amSo.FindProperty("_sfxGroup").objectReferenceValue = sfxGroup;
+            amSo.FindProperty("_voGroup").objectReferenceValue = voGroup;
             amSo.ApplyModifiedPropertiesWithoutUndo();
 
             // ── Canvas + panel ───────────────────────────────────────────────────
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            EnsureTmpEssentials();
+            EnsurePlaceholderSprites();
 
             var canvasGO = new GameObject(CanvasName, typeof(RectTransform));
             SceneManager.MoveGameObjectToScene(canvasGO, scene);
@@ -180,27 +186,36 @@ namespace AudioSystem.EditorTools
             panel.anchorMin = new Vector2(0.5f, 0.5f);
             panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(900, 600);
+            panel.sizeDelta = new Vector2(900, 720);
             panel.anchoredPosition = Vector2.zero;
             panel.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.08f, 0.10f, 0.95f);
 
-            MakeText(panel, font, "Title", 250, 800, 70, 40).text = "Audio Settings";
+            MakeTMP(panel, "Title", 0, 300, 800, 70, 40, TextAlignmentOptions.Center).text = "Audio Settings";
 
             var view = panel.gameObject.AddComponent<AudioVolumePanel>();
-            var rows = new (AudioChannel ch, Slider slider, Button btn, Image icon, Text pct)[3];
-            AudioChannel[] channels = { AudioChannel.Master, AudioChannel.BGM, AudioChannel.SFX };
+            AudioChannel[] channels = { AudioChannel.Master, AudioChannel.BGM, AudioChannel.SFX, AudioChannel.VO };
+            var rows = new (AudioChannel ch, Slider slider, Button btn, Image icon, TMP_Text pct)[channels.Length];
 
-            float y = 120f;
+            float y = 180f;
             for (int i = 0; i < channels.Length; i++)
             {
                 AudioChannel ch = channels[i];
-                MakeText(panel, font, ch + "Label", y, 200, 60, 28, TextAnchor.MiddleLeft, -330);
-                Slider slider = MakeSlider(panel, ch + "Slider", y, 460, 30, -40);
-                Text pct = MakeText(panel, font, ch + "Percent", y, 90, 60, 26, TextAnchor.MiddleCenter, 250);
+
+                // One empty RectTransform container per channel, holding all its widgets.
+                RectTransform container = NewRect(ch.ToString(), panel);
+                container.anchorMin = container.anchorMax = container.pivot = new Vector2(0.5f, 0.5f);
+                container.sizeDelta = new Vector2(820, 90);
+                container.anchoredPosition = new Vector2(0, y);
+
+                // Children laid out left→right inside the container (y = 0, centered).
+                MakeTMP(container, "Label", -340, 0, 180, 60, 30, TextAlignmentOptions.Left).text = ch.ToString();
+                Slider slider = MakeSlider(container, "Slider", 0, 440, 30, -30);
+                TMP_Text pct = MakeTMP(container, "Percent", 230, 0, 110, 60, 28, TextAlignmentOptions.Center);
                 pct.text = "100%";
-                (Button btn, Image icon) = MakeMuteButton(panel, ch + "Mute", y, 60, 360);
+                (Button btn, Image icon) = MakeMuteButton(container, "Toggle", 0, 64, 350);
+
                 rows[i] = (ch, slider, btn, icon, pct);
-                y -= 110f;
+                y -= 120f;
             }
 
             // Wire the panel rows.
@@ -216,7 +231,7 @@ namespace AudioSystem.EditorTools
                 el.FindPropertyRelative("muteIcon").objectReferenceValue = rows[i].icon;
                 el.FindPropertyRelative("percentLabel").objectReferenceValue = rows[i].pct;
             }
-            // _toggleButtonSprites left empty for the user to assign (0=mute,1=unmute).
+            AssignChannelToggleSprites(viewSo, channels);
             viewSo.ApplyModifiedPropertiesWithoutUndo();
 
             EditorUtility.SetDirty(manager);
@@ -227,6 +242,226 @@ namespace AudioSystem.EditorTools
             Debug.Log($"[AudioSystemBuilder] Built audio scene '{scene.name}' " +
                       $"(mixer wired: {mixer != null}, BGM: {bgmGroup != null}, SFX: {sfxGroup != null}).");
             Selection.activeGameObject = canvasGO;
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        //  3. Prefabs
+        // ════════════════════════════════════════════════════════════════════════
+
+        private const string PrefabFolder       = "Assets/_Source/Audio_Manager/Prefabs";
+        private const string ManagerPrefabPath  = PrefabFolder + "/AudioManager.prefab";
+        private const string PanelPrefabPath    = PrefabFolder + "/AudioVolumePanel.prefab";
+
+        /// <summary>
+        /// Builds the <b>AudioManager prefab</b>: logic-only root with
+        /// <see cref="AudioManager"/> pre-wired to the mixer and all four groups.
+        /// Drop into any scene once and call from code.
+        /// Menu: <b>Tools ▸ Audio Manager ▸ Build AudioManager Prefab</b>
+        /// </summary>
+        [MenuItem("Tools/Audio Manager/Build AudioManager Prefab")]
+        public static void BuildManagerPrefab()
+        {
+            EnsureFolder(PrefabFolder);
+            AudioMixer mixer = AssetDatabase.LoadAssetAtPath<AudioMixer>(MixerPath) ?? BuildAudioMixer();
+
+            GameObject root = new GameObject("AudioManager");
+            var manager = root.AddComponent<AudioManager>();
+            var so = new SerializedObject(manager);
+            so.FindProperty("_mixer").objectReferenceValue = mixer;
+            so.FindProperty("_bgmGroup").objectReferenceValue = FirstGroup(mixer, "BGM");
+            so.FindProperty("_sfxGroup").objectReferenceValue = FirstGroup(mixer, "SFX");
+            so.FindProperty("_voGroup").objectReferenceValue  = FirstGroup(mixer, "VO");
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            SavePrefab(root, ManagerPrefabPath, "AudioManager prefab");
+        }
+
+        /// <summary>
+        /// Builds the <b>AudioVolumePanel prefab</b>: self-contained Canvas UI panel
+        /// with four channel rows (Master, BGM, SFX, VO), each containing a
+        /// container RectTransform ▸ Label (TMP) / Slider / Percent (TMP) / Toggle button.
+        /// Drop into any Canvas — requires <see cref="AudioManager"/> in the scene.
+        /// Menu: <b>Tools ▸ Audio Manager ▸ Build AudioVolumePanel Prefab</b>
+        /// </summary>
+        [MenuItem("Tools/Audio Manager/Build AudioVolumePanel Prefab")]
+        public static void BuildPanelPrefab()
+        {
+            EnsureFolder(PrefabFolder);
+            EnsureTmpEssentials();
+            EnsurePlaceholderSprites();
+
+            // Root: just a RectTransform — user drops this into their own Canvas.
+            var root = new GameObject("AudioVolumePanel", typeof(RectTransform));
+
+            // Dark background panel.
+            RectTransform panel = NewRect("Panel", root.transform);
+            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+            panel.sizeDelta = new Vector2(900, 720);
+            panel.anchoredPosition = Vector2.zero;
+            panel.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.08f, 0.10f, 0.95f);
+
+            MakeTMP(panel, "Title", 0, 300, 800, 70, 40, TextAlignmentOptions.Center).text = "Audio Settings";
+
+            AudioChannel[] channels = { AudioChannel.Master, AudioChannel.BGM, AudioChannel.SFX, AudioChannel.VO };
+            var rows = new (AudioChannel ch, Slider slider, Button btn, Image icon, TMP_Text pct)[channels.Length];
+
+            float y = 180f;
+            for (int i = 0; i < channels.Length; i++)
+            {
+                AudioChannel ch = channels[i];
+
+                // Per-channel empty container (Master / BGM / SFX / VO).
+                RectTransform container = NewRect(ch.ToString(), panel);
+                container.anchorMin = container.anchorMax = container.pivot = new Vector2(0.5f, 0.5f);
+                container.sizeDelta = new Vector2(820, 90);
+                container.anchoredPosition = new Vector2(0, y);
+
+                MakeTMP(container, "Label", -340, 0, 180, 60, 30, TextAlignmentOptions.Left).text = ch.ToString();
+                Slider   slider = MakeSlider(container, "Slider",  0, 440, 30, -30);
+                TMP_Text pct    = MakeTMP(container, "Percent", 230, 0, 110, 60, 28, TextAlignmentOptions.Center);
+                pct.text = "100%";
+                (Button btn, Image icon) = MakeMuteButton(container, "Toggle", 0, 64, 350);
+
+                rows[i] = (ch, slider, btn, icon, pct);
+                y -= 120f;
+            }
+
+            // Wire AudioVolumePanel component.
+            var view   = panel.gameObject.AddComponent<AudioVolumePanel>();
+            var viewSo = new SerializedObject(view);
+            var rowsProp = viewSo.FindProperty("_rows");
+            rowsProp.arraySize = rows.Length;
+            for (int i = 0; i < rows.Length; i++)
+            {
+                SerializedProperty el = rowsProp.GetArrayElementAtIndex(i);
+                el.FindPropertyRelative("channel").enumValueIndex              = (int)rows[i].ch;
+                el.FindPropertyRelative("volumeSlider").objectReferenceValue   = rows[i].slider;
+                el.FindPropertyRelative("muteButton").objectReferenceValue     = rows[i].btn;
+                el.FindPropertyRelative("muteIcon").objectReferenceValue       = rows[i].icon;
+                el.FindPropertyRelative("percentLabel").objectReferenceValue   = rows[i].pct;
+            }
+            AssignChannelToggleSprites(viewSo, channels);
+            viewSo.ApplyModifiedPropertiesWithoutUndo();
+
+            SavePrefab(root, PanelPrefabPath, "AudioVolumePanel prefab");
+        }
+
+        private static void SavePrefab(GameObject instance, string path, string label)
+        {
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(instance, path, out bool ok);
+            UnityEngine.Object.DestroyImmediate(instance);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[AudioSystemBuilder] {label} {(ok ? "saved" : "FAILED")}: {path}");
+            if (ok) Selection.activeObject = prefab;
+        }
+
+        private const string SpritesFolder = "Assets/_Source/Audio_Manager/Sprites";
+
+        /// <summary>
+        /// Populates <c>_toggleButtonSprites</c> (a per-channel array) from the Sprites
+        /// folder by naming convention: <c>Sprites/{Channel}/{Channel}_Mute.png</c> and
+        /// <c>{Channel}_UnMute.png</c>. Channels without sprites are skipped. Each PNG is
+        /// ensured to import as a Sprite.
+        /// </summary>
+        private static void AssignChannelToggleSprites(SerializedObject viewSo, AudioChannel[] channels)
+        {
+            SerializedProperty arr = viewSo.FindProperty("_toggleButtonSprites");
+            arr.ClearArray();
+
+            int index = 0;
+            foreach (AudioChannel ch in channels)
+            {
+                Sprite mute   = LoadChannelSprite(ch, "Mute");
+                Sprite unmute = LoadChannelSprite(ch, "UnMute");
+                if (mute == null && unmute == null)
+                    continue; // no icons for this channel (e.g. Master) — leave it out
+
+                arr.InsertArrayElementAtIndex(index);
+                SerializedProperty el = arr.GetArrayElementAtIndex(index);
+                el.FindPropertyRelative("channel").enumValueIndex = (int)ch;
+                SerializedProperty sprites = el.FindPropertyRelative("sprites");
+                sprites.arraySize = 2;
+                sprites.GetArrayElementAtIndex(0).objectReferenceValue = mute;   // 0 = mute
+                sprites.GetArrayElementAtIndex(1).objectReferenceValue = unmute; // 1 = unmute
+                index++;
+            }
+        }
+
+        private static Sprite LoadChannelSprite(AudioChannel channel, string suffix)
+        {
+            string path = $"{SpritesFolder}/{channel}/{channel}_{suffix}.png";
+            EnsureSpriteImport(path);
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        /// <summary>Ensures a texture at <paramref name="path"/> imports as a Sprite.</summary>
+        private static void EnsureSpriteImport(string path)
+        {
+            if (AssetImporter.GetAtPath(path) is not TextureImporter importer)
+                return;
+            if (importer.textureType == TextureImporterType.Sprite)
+                return;
+
+            importer.textureType = TextureImporterType.Sprite;
+            importer.SaveAndReimport();
+        }
+
+        /// <summary>Imports TextMeshPro Essential Resources (settings + default font) if missing.</summary>
+        private static void EnsureTmpEssentials()
+        {
+            if (TMP_Settings.instance != null && TMP_Settings.defaultFontAsset != null)
+                return;
+
+            Type t = null;
+            foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                t = a.GetType("TMPro.TMP_PackageResourceImporter");
+                if (t != null) break;
+            }
+            if (t == null)
+            {
+                Debug.LogWarning("[AudioSystemBuilder] TMP importer not found; TMP labels may be blank until " +
+                                 "you run Window ▸ TextMeshPro ▸ Import TMP Essential Resources.");
+                return;
+            }
+
+            try
+            {
+                object importer = System.Runtime.Serialization.FormatterServices.GetUninitializedObject(t);
+                t.GetMethod("ImportResources")?.Invoke(importer, new object[] { true, false, false });
+                AssetDatabase.Refresh();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[AudioSystemBuilder] TMP essentials import failed: " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Ensures the VO and Master channels have toggle sprites by copying the SFX
+        /// sprites into their folders as placeholders (swap them for real art later).
+        /// </summary>
+        private static void EnsurePlaceholderSprites()
+        {
+            SeedChannelSprites(AudioChannel.VO);
+            SeedChannelSprites(AudioChannel.Master);
+            AssetDatabase.Refresh();
+        }
+
+        private static void SeedChannelSprites(AudioChannel channel)
+        {
+            string folder = $"{SpritesFolder}/{channel}";
+            EnsureFolder(folder);
+            CopyIfMissing($"{SpritesFolder}/SFX/SFX_Mute.png",   $"{folder}/{channel}_Mute.png");
+            CopyIfMissing($"{SpritesFolder}/SFX/SFX_UnMute.png", $"{folder}/{channel}_UnMute.png");
+        }
+
+        private static void CopyIfMissing(string source, string destination)
+        {
+            if (AssetDatabase.LoadAssetAtPath<Texture2D>(destination) != null) return;
+            if (AssetDatabase.LoadAssetAtPath<Texture2D>(source) == null) return;
+            AssetDatabase.CopyAsset(source, destination);
         }
 
         // ── Scene helpers ────────────────────────────────────────────────────────
@@ -277,17 +512,17 @@ namespace AudioSystem.EditorTools
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         }
 
-        private static Text MakeText(RectTransform parent, Font font, string name, float y, float w, float h,
-                                     int size, TextAnchor anchor = TextAnchor.MiddleCenter, float x = 0)
+        private static TMP_Text MakeTMP(RectTransform parent, string name, float x, float y, float w, float h,
+                                        int size, TextAlignmentOptions align)
         {
             RectTransform rt = NewRect(name, parent);
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(w, h);
             rt.anchoredPosition = new Vector2(x, y);
-            var t = rt.gameObject.AddComponent<Text>();
-            t.font = font; t.fontSize = size; t.alignment = anchor; t.color = Color.white;
-            t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
+            var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+            t.fontSize = size;
+            t.alignment = align;
+            t.color = Color.white;
             return t;
         }
 
