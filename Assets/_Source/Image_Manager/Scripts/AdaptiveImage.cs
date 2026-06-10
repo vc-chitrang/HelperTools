@@ -9,8 +9,8 @@ namespace ImageSystem
     /// ══════════════════════════════════════════════════════════════
     ///
     ///  Put this on an empty RectTransform (the FRAME that defines the
-    ///  visible bounds). It manages a child "Content" graphic and sizes
-    ///  it according to the chosen <see cref="ImageFillMode"/>:
+    ///  visible bounds). It manages two child graphics and sizes them
+    ///  according to the chosen <see cref="ImageFillMode"/>:
     ///
     ///    Fill           → cover the frame, overflow visible
     ///    Fit            → letterbox inside the frame
@@ -23,6 +23,11 @@ namespace ImageSystem
     ///    img.SetSprite(mySprite);                  // or img.SetTexture(myTexture)
     ///    img.FillMode = ImageFillMode.Crop;
     ///
+    ///  Two separate children are used — ContentSprite (Image) and
+    ///  ContentTexture (RawImage) — because Unity 6 Graphic base class
+    ///  carries [DisallowMultipleComponent], so both cannot live on the
+    ///  same GameObject. Only the active child is visible at any time.
+    ///
     ///  Re-applies automatically when the frame is resized (layout groups,
     ///  screen rotation) — sizing math lives in <see cref="FillModeMath"/>.
     /// </summary>
@@ -32,7 +37,8 @@ namespace ImageSystem
     [AddComponentMenu("HelperTools/Image/AdaptiveImage")]
     public class AdaptiveImage : MonoBehaviour
     {
-        private const string ContentName = "Content";
+        private const string SpriteChildName  = "ContentSprite";
+        private const string TextureChildName = "ContentTexture";
 
         [Tooltip("How the image content is sized relative to this RectTransform (the frame):\n" +
                  "• Fill — scale to cover the frame, overflow stays visible\n" +
@@ -50,10 +56,13 @@ namespace ImageSystem
                  "Used only when Sprite is empty. Set from code with SetTexture(texture).")]
         [SerializeField] private Texture _texture;
 
-        private RectTransform _content;
-        private Image _image;          // used when content is a Sprite
-        private RawImage _rawImage;    // used when content is a Texture
-        private RectMask2D _mask;      // enabled only in Crop mode
+        // Two separate children — Image and RawImage can't share a GameObject in Unity 6
+        // because Graphic carries [DisallowMultipleComponent].
+        private RectTransform _spriteRT;
+        private RectTransform _textureRT;
+        private Image      _image;
+        private RawImage   _rawImage;
+        private RectMask2D _mask;
 
         // ──────────────────────────────────────────────────────────────────────
         //  Public API
@@ -69,7 +78,7 @@ namespace ImageSystem
         /// <summary>Displays a sprite (clears any raw texture) and re-applies the layout.</summary>
         public void SetSprite(Sprite sprite)
         {
-            _sprite = sprite;
+            _sprite  = sprite;
             _texture = null;
             Apply();
         }
@@ -78,7 +87,7 @@ namespace ImageSystem
         public void SetTexture(Texture texture)
         {
             _texture = texture;
-            _sprite = null;
+            _sprite  = null;
             Apply();
         }
 
@@ -93,19 +102,23 @@ namespace ImageSystem
 
             EnsureContent();
 
-            // Route content to the right graphic; hide the other one.
-            bool useSprite = _sprite != null;
-            _image.enabled = useSprite;
-            _rawImage.enabled = !useSprite && _texture != null;
-            _image.sprite = useSprite ? _sprite : null;
-            _rawImage.texture = useSprite ? null : _texture;
+            bool useSprite  = _sprite != null;
+            bool useTexture = !useSprite && _texture != null;
+
+            _spriteRT.gameObject.SetActive(useSprite);
+            _textureRT.gameObject.SetActive(useTexture);
+
+            if (useSprite)  _image.sprite    = _sprite;
+            if (useTexture) _rawImage.texture = _texture;
 
             // Crop is the only mode that needs masking.
             _mask.enabled = _fillMode == ImageFillMode.Crop;
 
-            Vector2 contentNativeSize = GetNativeSize();
-            Vector2 frameSize = ((RectTransform)transform).rect.size;
-            _content.sizeDelta = FillModeMath.GetContentSize(frameSize, contentNativeSize, _fillMode);
+            Vector2 contentSize = FillModeMath.GetContentSize(
+                ((RectTransform)transform).rect.size, GetNativeSize(), _fillMode);
+
+            _spriteRT.sizeDelta  = contentSize;
+            _textureRT.sizeDelta = contentSize;
         }
 
         // ──────────────────────────────────────────────────────────────────────
@@ -116,8 +129,7 @@ namespace ImageSystem
 
         private void OnRectTransformDimensionsChange()
         {
-            // Fired whenever the frame is resized (layout pass, rotation, etc.).
-            if (isActiveAndEnabled && _content != null)
+            if (isActiveAndEnabled && _spriteRT != null)
                 Apply();
         }
 
@@ -139,47 +151,32 @@ namespace ImageSystem
 
         private Vector2 GetNativeSize()
         {
-            if (_sprite != null)
-                return _sprite.rect.size;
-            if (_texture != null)
-                return new Vector2(_texture.width, _texture.height);
+            if (_sprite  != null) return _sprite.rect.size;
+            if (_texture != null) return new Vector2(_texture.width, _texture.height);
             return Vector2.zero;
         }
 
-        /// <summary>Finds or creates the child content graphic and the crop mask.</summary>
+        /// <summary>
+        /// Finds or creates the two content children and the crop mask.
+        /// Separated into ContentSprite (Image) and ContentTexture (RawImage)
+        /// because Graphic has [DisallowMultipleComponent] in Unity 6.
+        /// </summary>
         private void EnsureContent()
         {
-            if (_content == null)
-            {
-                Transform existing = transform.Find(ContentName);
-                if (existing != null)
-                {
-                    _content = (RectTransform)existing;
-                }
-                else
-                {
-                    var go = new GameObject(ContentName, typeof(RectTransform));
-                    _content = (RectTransform)go.transform;
-                    _content.SetParent(transform, false);
-                }
-
-                // Centered child; size is driven purely by sizeDelta.
-                _content.anchorMin = _content.anchorMax = new Vector2(0.5f, 0.5f);
-                _content.pivot = new Vector2(0.5f, 0.5f);
-                _content.anchoredPosition = Vector2.zero;
-            }
+            _spriteRT  = EnsureChild(SpriteChildName,  ref _spriteRT);
+            _textureRT = EnsureChild(TextureChildName, ref _textureRT);
 
             if (_image == null)
             {
-                _image = _content.GetComponent<Image>();
-                if (_image == null) _image = _content.gameObject.AddComponent<Image>();
+                _image = _spriteRT.GetComponent<Image>();
+                if (_image == null) _image = _spriteRT.gameObject.AddComponent<Image>();
                 _image.raycastTarget = false;
             }
 
             if (_rawImage == null)
             {
-                _rawImage = _content.GetComponent<RawImage>();
-                if (_rawImage == null) _rawImage = _content.gameObject.AddComponent<RawImage>();
+                _rawImage = _textureRT.GetComponent<RawImage>();
+                if (_rawImage == null) _rawImage = _textureRT.gameObject.AddComponent<RawImage>();
                 _rawImage.raycastTarget = false;
             }
 
@@ -188,6 +185,29 @@ namespace ImageSystem
                 _mask = GetComponent<RectMask2D>();
                 if (_mask == null) _mask = gameObject.AddComponent<RectMask2D>();
             }
+        }
+
+        private RectTransform EnsureChild(string childName, ref RectTransform cached)
+        {
+            if (cached != null) return cached;
+
+            Transform existing = transform.Find(childName);
+            if (existing != null)
+            {
+                cached = (RectTransform)existing;
+            }
+            else
+            {
+                var go = new GameObject(childName, typeof(RectTransform));
+                cached = (RectTransform)go.transform;
+                cached.SetParent(transform, false);
+            }
+
+            // Centered child; size driven purely by sizeDelta.
+            cached.anchorMin        = cached.anchorMax = new Vector2(0.5f, 0.5f);
+            cached.pivot            = new Vector2(0.5f, 0.5f);
+            cached.anchoredPosition = Vector2.zero;
+            return cached;
         }
     }
 }

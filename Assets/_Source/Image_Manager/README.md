@@ -417,8 +417,6 @@ public class MinimapView : MonoBehaviour
 
 | Menu (Tools ▸ Image Manager) | Action |
 |------------------------------|--------|
-| **Build AdaptiveImage Prefab** | Creates `Prefabs/AdaptiveImage.prefab` — drop into any canvas and call `SetSprite()` / `SetTexture()` |
-| **Build Image Demo Scene** | Builds `Scenes/ImageManagerScene.unity` showing all 5 fill modes side by side |
 | **Capture Game View Screenshot** | Timestamped PNG → `Screenshots/` at project root |
 | **Create Thumbnail From Selected Texture** | 256px `_thumb.png` next to the selected asset |
 | **Blur Selected Texture** | `_blurred.png` next to the selected asset |
