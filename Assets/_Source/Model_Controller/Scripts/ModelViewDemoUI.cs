@@ -69,18 +69,25 @@ namespace ModelController
 
         private static string BuildHints()
         {
+            const string pivotNote =
+                "\n<size=80%><color=#AAAAAA>" +
+                "Setup: place your 3D model as a child of 'ModelViewPivot'" +
+                "</color></size>";
+
             bool isMobile = Application.isMobilePlatform;
             if (isMobile)
             {
                 return "<b>1 Finger</b> — Orbit\n" +
                        "<b>2 Fingers Pinch</b> — Zoom\n" +
                        "<b>2 Fingers Drag</b> — Pan\n" +
-                       "<b>Double Tap</b> — Reset";
+                       "<b>Double Tap</b> — Reset" +
+                       pivotNote;
             }
             return "<b>LMB Drag</b> — Orbit\n" +
                    "<b>RMB / MMB Drag</b> — Pan\n" +
                    "<b>Scroll Wheel</b> — Zoom\n" +
-                   "<b>R</b> — Reset view";
+                   "<b>R</b> — Reset view" +
+                   pivotNote;
         }
     }
 }
