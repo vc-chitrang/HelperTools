@@ -1,0 +1,16 @@
+Id,ItemName,ItemType,Level,Power,Description
+sword_01,Iron Sword,Weapon,1,10.5,A basic iron sword for beginners
+sword_02,Steel Sword,Weapon,5,25.0,A sharp and reliable steel sword
+sword_03,Silver Sword,Weapon,10,50.0,Imbued with silver against dark creatures
+bow_01,Short Bow,Weapon,3,15.0,A nimble short bow for scouts
+bow_02,Long Bow,Weapon,8,38.0,High range and piercing power
+shield_01,Wooden Shield,Armor,1,5.0,Simple wooden shield
+shield_02,Iron Shield,Armor,4,18.0,Sturdy iron shield with minor magic resistance
+armor_01,Leather Armor,Armor,2,12.0,Light leather armor; good mobility
+armor_02,Chain Mail,Armor,6,28.0,Balanced protection and movement
+armor_03,Plate Armor,Armor,12,60.0,Heavy plate; maximum protection
+ring_01,Magic Ring,Accessory,8,35.0,A ring humming with arcane energy
+amulet_01,Pendant of Luck,Accessory,5,22.0,Slightly improves item drop rates
+potion_01,Health Potion,Consumable,1,0.0,Restores 50 HP instantly
+potion_02,Mana Potion,Consumable,1,0.0,Restores 30 MP instantly
+potion_03,Elixir,Consumable,15,0.0,Fully restores HP and MP
