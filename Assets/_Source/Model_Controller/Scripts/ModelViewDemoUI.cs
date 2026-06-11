@@ -6,7 +6,7 @@ namespace ModelController
 {
     /// <summary>
     /// Demo UI controller for the Model Controller scene.
-    /// Wires Reset / Focus buttons and drives the hints label.
+    /// Wires Reset / Focus buttons, invert toggles, and drives the hints label.
     /// </summary>
     [AddComponentMenu("HelperTools/Model Controller/ModelViewDemoUI")]
     public class ModelViewDemoUI : MonoBehaviour
@@ -15,19 +15,42 @@ namespace ModelController
         [SerializeField] private ModelViewController _controller;
         [SerializeField] private Transform           _modelRoot;
 
-        [Header("UI")]
+        [Header("Buttons")]
         [SerializeField] private Button    _resetButton;
         [SerializeField] private Button    _focusButton;
+
+        [Header("Labels")]
         [SerializeField] private TMP_Text  _statsLabel;
         [SerializeField] private TMP_Text  _hintsLabel;
+
+        [Header("Invert Toggles")]
+        [SerializeField] private Toggle _invertOrbitXToggle;
+        [SerializeField] private Toggle _invertOrbitYToggle;
+        [SerializeField] private Toggle _invertPanXToggle;
+        [SerializeField] private Toggle _invertPanYToggle;
 
         private void Start()
         {
             _resetButton?.onClick.AddListener(OnReset);
             _focusButton?.onClick.AddListener(OnFocus);
 
+            if (_controller != null)
+            {
+                BindToggle(_invertOrbitXToggle, _controller.InvertOrbitX, v => _controller.InvertOrbitX = v);
+                BindToggle(_invertOrbitYToggle, _controller.InvertOrbitY, v => _controller.InvertOrbitY = v);
+                BindToggle(_invertPanXToggle,   _controller.InvertPanX,   v => _controller.InvertPanX   = v);
+                BindToggle(_invertPanYToggle,   _controller.InvertPanY,   v => _controller.InvertPanY   = v);
+            }
+
             if (_hintsLabel != null)
                 _hintsLabel.text = BuildHints();
+        }
+
+        private static void BindToggle(Toggle toggle, bool initial, System.Action<bool> onChange)
+        {
+            if (toggle == null) return;
+            toggle.SetIsOnWithoutNotify(initial);
+            toggle.onValueChanged.AddListener(v => onChange(v));
         }
 
         private void Update()

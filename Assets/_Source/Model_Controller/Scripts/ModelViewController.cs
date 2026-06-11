@@ -111,6 +111,12 @@ namespace ModelController
         public float   Elevation   => _elevation;
         public float   Distance    => _distance;
 
+        // Invert toggles — read/write at runtime
+        public bool InvertOrbitX { get => _invertOrbitX; set => _invertOrbitX = value; }
+        public bool InvertOrbitY { get => _invertOrbitY; set => _invertOrbitY = value; }
+        public bool InvertPanX   { get => _invertPanX;   set => _invertPanX   = value; }
+        public bool InvertPanY   { get => _invertPanY;   set => _invertPanY   = value; }
+
         // ── Unity lifecycle ───────────────────────────────────────────────
 
         private void Awake()
