@@ -43,8 +43,9 @@ namespace ModelController
         [SerializeField] private float _orbitSpeedTouch = 0.18f;
         [SerializeField] private float _minElevation    = -80f;
         [SerializeField] private float _maxElevation    =  80f;
-        [SerializeField] private bool  _invertOrbitX    = false;
-        [SerializeField] private bool  _invertOrbitY    = false;
+        [SerializeField] private bool  _invertOrbitX    = true;
+        [SerializeField] private bool  _invertOrbitY    = true;
+        [SerializeField] private bool  _orbitLocalAxis  = false;
 
         // ── Zoom ──────────────────────────────────────────────────────────
         [Header("Zoom")]
@@ -58,8 +59,8 @@ namespace ModelController
         [Header("Pan")]
         [SerializeField] private float _panSpeedMouse = 1f;
         [SerializeField] private float _panSpeedTouch = 1f;
-        [SerializeField] private bool  _invertPanX    = false;
-        [SerializeField] private bool  _invertPanY    = false;
+        [SerializeField] private bool  _invertPanX    = true;
+        [SerializeField] private bool  _invertPanY    = true;
 
         // ── Inertia ───────────────────────────────────────────────────────
         [Header("Inertia")]
@@ -111,11 +112,16 @@ namespace ModelController
         public float   Elevation   => _elevation;
         public float   Distance    => _distance;
 
-        // Invert toggles — read/write at runtime
-        public bool InvertOrbitX { get => _invertOrbitX; set => _invertOrbitX = value; }
-        public bool InvertOrbitY { get => _invertOrbitY; set => _invertOrbitY = value; }
-        public bool InvertPanX   { get => _invertPanX;   set => _invertPanX   = value; }
-        public bool InvertPanY   { get => _invertPanY;   set => _invertPanY   = value; }
+        // Invert toggles + orbit mode — read/write at runtime
+        public bool InvertOrbitX  { get => _invertOrbitX;  set => _invertOrbitX  = value; }
+        public bool InvertOrbitY  { get => _invertOrbitY;  set => _invertOrbitY  = value; }
+        public bool InvertPanX    { get => _invertPanX;    set => _invertPanX    = value; }
+        public bool InvertPanY    { get => _invertPanY;    set => _invertPanY    = value; }
+        /// <summary>
+        /// false = Turntable (orbit around world Y — horizon stays level).
+        /// true  = Trackball (orbit around camera-local axes — free tumble).
+        /// </summary>
+        public bool OrbitLocalAxis { get => _orbitLocalAxis; set => _orbitLocalAxis = value; }
 
         // ── Unity lifecycle ───────────────────────────────────────────────
 
@@ -304,12 +310,31 @@ namespace ModelController
 
         private void ApplyOrbitDelta(Vector2 delta)
         {
-            // delta.x < 0 = drag right → model spins clockwise (product-viewer feel)
-            // delta.y > 0 = drag up → camera goes higher (see top)
-            _azimuth   += _invertOrbitX ? -delta.x : delta.x;
-            _elevation  = Mathf.Clamp(
-                _elevation + (_invertOrbitY ? -delta.y : delta.y),
-                _minElevation, _maxElevation);
+            float dAz = _invertOrbitX ? -delta.x : delta.x;
+            float dEl = _invertOrbitY ? -delta.y : delta.y;
+
+            if (_orbitLocalAxis)
+            {
+                // Trackball: rotate the camera offset around camera-local axes.
+                // Allows free tumble — no world-up constraint.
+                Vector3 offset = transform.position - _targetPoint;
+                offset = Quaternion.AngleAxis( dAz, transform.up)    * offset;
+                offset = Quaternion.AngleAxis(-dEl, transform.right)  * offset;
+
+                float   dist = Mathf.Max(offset.magnitude, 0.0001f);
+                Vector3 dir  = offset / dist;
+                _elevation = Mathf.Clamp(
+                    Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg,
+                    _minElevation, _maxElevation);
+                _azimuth = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+            }
+            else
+            {
+                // Turntable: azimuth around world Y, elevation tilts up/down.
+                // Horizon always stays level.
+                _azimuth   += dAz;
+                _elevation  = Mathf.Clamp(_elevation + dEl, _minElevation, _maxElevation);
+            }
         }
 
         private void Pan(Vector2 screenDeltaPixels)

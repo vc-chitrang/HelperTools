@@ -28,6 +28,7 @@ namespace ModelController
         [SerializeField] private Toggle _invertOrbitYToggle;
         [SerializeField] private Toggle _invertPanXToggle;
         [SerializeField] private Toggle _invertPanYToggle;
+        [SerializeField] private Toggle _orbitLocalAxisToggle;
 
         private void Start()
         {
@@ -36,10 +37,11 @@ namespace ModelController
 
             if (_controller != null)
             {
-                BindToggle(_invertOrbitXToggle, _controller.InvertOrbitX, v => _controller.InvertOrbitX = v);
-                BindToggle(_invertOrbitYToggle, _controller.InvertOrbitY, v => _controller.InvertOrbitY = v);
-                BindToggle(_invertPanXToggle,   _controller.InvertPanX,   v => _controller.InvertPanX   = v);
-                BindToggle(_invertPanYToggle,   _controller.InvertPanY,   v => _controller.InvertPanY   = v);
+                BindToggle(_invertOrbitXToggle,  _controller.InvertOrbitX,  v => _controller.InvertOrbitX  = v);
+                BindToggle(_invertOrbitYToggle,  _controller.InvertOrbitY,  v => _controller.InvertOrbitY  = v);
+                BindToggle(_invertPanXToggle,    _controller.InvertPanX,    v => _controller.InvertPanX    = v);
+                BindToggle(_invertPanYToggle,    _controller.InvertPanY,    v => _controller.InvertPanY    = v);
+                BindToggle(_orbitLocalAxisToggle,_controller.OrbitLocalAxis,v => _controller.OrbitLocalAxis= v);
             }
 
             if (_hintsLabel != null)
