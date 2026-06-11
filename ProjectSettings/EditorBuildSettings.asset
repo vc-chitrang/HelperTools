@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_Source/IOT/Kiosk_LED_Contol/Scenes/LEDControlKioskScene_Android.unity
+    guid: 613bdf90f1fc95247bfef39c5f021b35
+  - enabled: 0
     path: Assets/_Source/Download_Manager/Scenes/DownloadScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   m_configObjects:
