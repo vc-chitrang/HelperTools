@@ -23,12 +23,6 @@ namespace ModelController
     ///    2-finger pinch     → Zoom
     ///    2-finger translate → Pan
     ///    Double-tap         → Reset view
-    ///
-    ///  SETUP:
-    ///    1. Create an empty GameObject — name it 'ModelViewPivot'.
-    ///    2. Place your 3D model as a child of 'ModelViewPivot'.
-    ///    3. Assign 'ModelViewPivot' to the [Model Pivot] field on this component.
-    ///    All orbit / zoom / pan operations will be applied to that pivot.
     /// </summary>
     [AddComponentMenu("HelperTools/Model Controller/ModelViewController")]
     [RequireComponent(typeof(Camera))]
@@ -43,16 +37,6 @@ namespace ModelController
         [SerializeField] private float     _defaultDistance  = 5f;
         [SerializeField] private Transform _autoFocusTarget;   // optional — FocusOn() called on Start
 
-        // ── Model Pivot ───────────────────────────────────────────────────
-        [Header("Model Pivot")]
-        [Tooltip(
-            "Assign the 'ModelViewPivot' empty parent that contains your 3D model.\n\n" +
-            "OrbitLocalAxis = OFF  → camera orbits around the pivot (model stays still).\n" +
-            "OrbitLocalAxis = ON   → the pivot rotates on its own local axes (model spins).\n\n" +
-            "Pan also moves the pivot when OrbitLocalAxis is ON.\n" +
-            "Reset returns the pivot to its Start() pose.")]
-        [SerializeField] private Transform _modelPivot;
-
         // ── Orbit ─────────────────────────────────────────────────────────
         [Header("Orbit")]
         [SerializeField] private float _orbitSpeedMouse = 0.25f;
@@ -61,7 +45,6 @@ namespace ModelController
         [SerializeField] private float _maxElevation    =  80f;
         [SerializeField] private bool  _invertOrbitX    = true;
         [SerializeField] private bool  _invertOrbitY    = true;
-        [SerializeField] private bool  _orbitLocalAxis  = false;
 
         // ── Zoom ──────────────────────────────────────────────────────────
         [Header("Zoom")]
@@ -95,10 +78,6 @@ namespace ModelController
         private float   _targetDistance;
         private Vector3 _targetPoint;
 
-        // Pivot home pose — captured in Start(), restored by ResetView()
-        private Vector3    _pivotHomePosition;
-        private Quaternion _pivotHomeRotation;
-
         // Inertia
         private Vector2 _orbitVelocity;
         private bool    _orbitActive;
@@ -116,36 +95,24 @@ namespace ModelController
         private const float DoubleTapWindow = 0.35f;
 
         // Reset animation
-        private bool       _resetting;
-        private float      _resetT;
-        private float      _resetFromAz, _resetFromEl, _resetFromDist;
-        private Vector3    _resetFromTarget;
-        private Vector3    _resetFromPivotPos;
-        private Quaternion _resetFromPivotRot;
+        private bool    _resetting;
+        private float   _resetT;
+        private float   _resetFromAz, _resetFromEl, _resetFromDist;
+        private Vector3 _resetFromTarget;
 
         private Camera _cam;
 
         // ── Public properties ─────────────────────────────────────────────
-        public Vector3   TargetPoint => _targetPoint;
-        public float     Azimuth     => _azimuth;
-        public float     Elevation   => _elevation;
-        public float     Distance    => _distance;
-        public Transform ModelPivot  => _modelPivot;
+        public Vector3 TargetPoint => _targetPoint;
+        public float   Azimuth     => _azimuth;
+        public float   Elevation   => _elevation;
+        public float   Distance    => _distance;
 
         // Invert toggles — read/write at runtime
-        public bool InvertOrbitX  { get => _invertOrbitX;  set => _invertOrbitX  = value; }
-        public bool InvertOrbitY  { get => _invertOrbitY;  set => _invertOrbitY  = value; }
-        public bool InvertPanX    { get => _invertPanX;    set => _invertPanX    = value; }
-        public bool InvertPanY    { get => _invertPanY;    set => _invertPanY    = value; }
-
-        /// <summary>
-        /// false — Turntable: camera orbits around ModelViewPivot using world Y.
-        ///         Model stays still; the camera moves.
-        /// true  — Local Axis: ModelViewPivot rotates on its own local axes.
-        ///         Model spins in place; camera stays at its current spherical position.
-        ///         Requires _modelPivot to be assigned.
-        /// </summary>
-        public bool OrbitLocalAxis { get => _orbitLocalAxis; set => _orbitLocalAxis = value; }
+        public bool InvertOrbitX { get => _invertOrbitX; set => _invertOrbitX = value; }
+        public bool InvertOrbitY { get => _invertOrbitY; set => _invertOrbitY = value; }
+        public bool InvertPanX   { get => _invertPanX;   set => _invertPanX   = value; }
+        public bool InvertPanY   { get => _invertPanY;   set => _invertPanY   = value; }
 
         // ── Unity lifecycle ───────────────────────────────────────────────
 
@@ -157,13 +124,6 @@ namespace ModelController
 
         private void Start()
         {
-            // Cache pivot home pose so ResetView() can animate it back.
-            if (_modelPivot != null)
-            {
-                _pivotHomePosition = _modelPivot.position;
-                _pivotHomeRotation = _modelPivot.localRotation;
-            }
-
             if (_autoFocusTarget != null)
                 FocusOn(_autoFocusTarget);
         }
@@ -339,22 +299,9 @@ namespace ModelController
         {
             float dAz = _invertOrbitX ? -delta.x : delta.x;
             float dEl = _invertOrbitY ? -delta.y : delta.y;
-
-            if (_orbitLocalAxis && _modelPivot != null)
-            {
-                // Local-Axis mode: rotate the model's pivot on its own local axes.
-                // Horizontal drag spins the pivot around its local Y (model rotates left/right).
-                // Vertical drag tilts it around its local X (model rotates up/down).
-                // Camera position/azimuth/elevation remain unchanged — the model spins in place.
-                _modelPivot.Rotate(Vector3.up,    dAz, Space.Self);
-                _modelPivot.Rotate(Vector3.right,  dEl, Space.Self);
-            }
-            else
-            {
-                // Turntable: camera orbits around world Y. Horizon always stays level.
-                _azimuth   += dAz;
-                _elevation  = Mathf.Clamp(_elevation + dEl, _minElevation, _maxElevation);
-            }
+            // Turntable: camera orbits around world Y. Horizon always stays level.
+            _azimuth   += dAz;
+            _elevation  = Mathf.Clamp(_elevation + dEl, _minElevation, _maxElevation);
         }
 
         private void Pan(Vector2 screenDeltaPixels)
@@ -366,23 +313,13 @@ namespace ModelController
 
             float px = _invertPanX ? -screenDeltaPixels.x : screenDeltaPixels.x;
             float py = _invertPanY ? -screenDeltaPixels.y : screenDeltaPixels.y;
-            Vector3 panVec = (transform.right * px + transform.up * py) * worldPerPx;
-
-            if (_orbitLocalAxis && _modelPivot != null)
-                _modelPivot.position += panVec;  // slide the physical pivot (model moves)
-            else
-                _targetPoint += panVec;           // slide the camera orbit centre
+            _targetPoint += (transform.right * px + transform.up * py) * worldPerPx;
         }
 
         // ── Pose ──────────────────────────────────────────────────────────
 
         private void ApplyPose()
         {
-            // In local-axis mode the camera always looks at wherever the pivot currently is
-            // (it may have been slid by pan or still at its home position).
-            if (_orbitLocalAxis && _modelPivot != null)
-                _targetPoint = _modelPivot.position;
-
             Vector3 offset = SphericalToCartesian(_azimuth, _elevation, _distance);
             transform.position = _targetPoint + offset;
 
@@ -429,19 +366,17 @@ namespace ModelController
 
         // ── Reset ─────────────────────────────────────────────────────────
 
-        /// <summary>Smoothly animates the camera and model pivot back to their Start() poses.</summary>
+        /// <summary>Smoothly animates the camera back to its default pose.</summary>
         public void ResetView()
         {
             if (_resetting) return;
-            _resetFromAz       = _azimuth;
-            _resetFromEl       = _elevation;
-            _resetFromDist     = _distance;
-            _resetFromTarget   = _targetPoint;
-            _resetFromPivotPos = _modelPivot != null ? _modelPivot.position      : Vector3.zero;
-            _resetFromPivotRot = _modelPivot != null ? _modelPivot.localRotation : Quaternion.identity;
-            _resetT            = 0f;
-            _resetting         = true;
-            _orbitVelocity     = Vector2.zero;
+            _resetFromAz     = _azimuth;
+            _resetFromEl     = _elevation;
+            _resetFromDist   = _distance;
+            _resetFromTarget = _targetPoint;
+            _resetT          = 0f;
+            _resetting       = true;
+            _orbitVelocity   = Vector2.zero;
         }
 
         private void ResetImmediate()
@@ -463,13 +398,6 @@ namespace ModelController
             _distance       = Mathf.Lerp    (_resetFromDist,  _defaultDistance,  t);
             _targetDistance = _distance;
             _targetPoint    = Vector3.Lerp  (_resetFromTarget, _defaultTarget,   t);
-
-            // Animate the pivot back to its initial pose
-            if (_modelPivot != null)
-            {
-                _modelPivot.position      = Vector3.Lerp    (_resetFromPivotPos, _pivotHomePosition, t);
-                _modelPivot.localRotation = Quaternion.Slerp(_resetFromPivotRot, _pivotHomeRotation, t);
-            }
 
             if (_resetT >= 1f) _resetting = false;
             ApplyPose();

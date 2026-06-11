@@ -28,7 +28,6 @@ namespace ModelController
         [SerializeField] private Toggle _invertOrbitYToggle;
         [SerializeField] private Toggle _invertPanXToggle;
         [SerializeField] private Toggle _invertPanYToggle;
-        [SerializeField] private Toggle _orbitLocalAxisToggle;
 
         private void Start()
         {
@@ -37,11 +36,10 @@ namespace ModelController
 
             if (_controller != null)
             {
-                BindToggle(_invertOrbitXToggle,  _controller.InvertOrbitX,  v => _controller.InvertOrbitX  = v);
-                BindToggle(_invertOrbitYToggle,  _controller.InvertOrbitY,  v => _controller.InvertOrbitY  = v);
-                BindToggle(_invertPanXToggle,    _controller.InvertPanX,    v => _controller.InvertPanX    = v);
-                BindToggle(_invertPanYToggle,    _controller.InvertPanY,    v => _controller.InvertPanY    = v);
-                BindToggle(_orbitLocalAxisToggle,_controller.OrbitLocalAxis,v => _controller.OrbitLocalAxis= v);
+                BindToggle(_invertOrbitXToggle, _controller.InvertOrbitX, v => _controller.InvertOrbitX = v);
+                BindToggle(_invertOrbitYToggle, _controller.InvertOrbitY, v => _controller.InvertOrbitY = v);
+                BindToggle(_invertPanXToggle,   _controller.InvertPanX,   v => _controller.InvertPanX   = v);
+                BindToggle(_invertPanYToggle,   _controller.InvertPanY,   v => _controller.InvertPanY   = v);
             }
 
             if (_hintsLabel != null)
@@ -69,25 +67,18 @@ namespace ModelController
 
         private static string BuildHints()
         {
-            const string pivotNote =
-                "\n<size=80%><color=#AAAAAA>" +
-                "Setup: place your 3D model as a child of 'ModelViewPivot'" +
-                "</color></size>";
-
             bool isMobile = Application.isMobilePlatform;
             if (isMobile)
             {
                 return "<b>1 Finger</b> — Orbit\n" +
                        "<b>2 Fingers Pinch</b> — Zoom\n" +
                        "<b>2 Fingers Drag</b> — Pan\n" +
-                       "<b>Double Tap</b> — Reset" +
-                       pivotNote;
+                       "<b>Double Tap</b> — Reset";
             }
             return "<b>LMB Drag</b> — Orbit\n" +
                    "<b>RMB / MMB Drag</b> — Pan\n" +
                    "<b>Scroll Wheel</b> — Zoom\n" +
-                   "<b>R</b> — Reset view" +
-                   pivotNote;
+                   "<b>R</b> — Reset view";
         }
     }
 }
