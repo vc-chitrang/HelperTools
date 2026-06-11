@@ -43,6 +43,8 @@ namespace ModelController
         [SerializeField] private float _orbitSpeedTouch = 0.18f;
         [SerializeField] private float _minElevation    = -80f;
         [SerializeField] private float _maxElevation    =  80f;
+        [SerializeField] private bool  _invertOrbitX    = false;
+        [SerializeField] private bool  _invertOrbitY    = false;
 
         // ── Zoom ──────────────────────────────────────────────────────────
         [Header("Zoom")]
@@ -56,6 +58,8 @@ namespace ModelController
         [Header("Pan")]
         [SerializeField] private float _panSpeedMouse = 1f;
         [SerializeField] private float _panSpeedTouch = 1f;
+        [SerializeField] private bool  _invertPanX    = false;
+        [SerializeField] private bool  _invertPanY    = false;
 
         // ── Inertia ───────────────────────────────────────────────────────
         [Header("Inertia")]
@@ -296,8 +300,10 @@ namespace ModelController
         {
             // delta.x < 0 = drag right → model spins clockwise (product-viewer feel)
             // delta.y > 0 = drag up → camera goes higher (see top)
-            _azimuth   += delta.x;
-            _elevation  = Mathf.Clamp(_elevation + delta.y, _minElevation, _maxElevation);
+            _azimuth   += _invertOrbitX ? -delta.x : delta.x;
+            _elevation  = Mathf.Clamp(
+                _elevation + (_invertOrbitY ? -delta.y : delta.y),
+                _minElevation, _maxElevation);
         }
 
         private void Pan(Vector2 screenDeltaPixels)
@@ -307,8 +313,9 @@ namespace ModelController
             float frustumHeight = 2f * _distance * Mathf.Tan(halfFovRad);
             float worldPerPx    = frustumHeight / Screen.height;
 
-            _targetPoint += (transform.right * screenDeltaPixels.x
-                           + transform.up    * screenDeltaPixels.y) * worldPerPx;
+            float px = _invertPanX ? -screenDeltaPixels.x : screenDeltaPixels.x;
+            float py = _invertPanY ? -screenDeltaPixels.y : screenDeltaPixels.y;
+            _targetPoint += (transform.right * px + transform.up * py) * worldPerPx;
         }
 
         // ── Pose ──────────────────────────────────────────────────────────
